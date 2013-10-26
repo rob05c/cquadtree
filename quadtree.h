@@ -11,16 +11,19 @@ struct Point
   double Y;
 };
 
-struct PointListNode
+class PointListNode
 {
+public:
+  PointListNode(const Point& p, PointListNode* next) : NodePoint(p), Next(next) {}
   Point NodePoint;
   PointListNode* Next;
 };
 
+/// @todo change this to use std iterators
 class PointList
 {
 public:
-  PointList(int capacity) : Capacity(capacity), First(NULL), Length(0) {}
+  PointList(int capacity) : Capacity(capacity), First(nullptr), Length(0) {}
   int Capacity;
   PointListNode* First;
   int Length; // cache for speed; we could calculate it in O(n) by iterating thru the nodes
@@ -31,14 +34,14 @@ class BoundingBox
 public:
   Point Center;
   Point HalfDimension;
-  bool Contains(const Point& p)
+  bool Contains(const Point& p) const
   {
     return p.X >= Center.X - HalfDimension.X
       && p.X <= Center.X + HalfDimension.X
       && p.Y >= Center.Y - HalfDimension.Y
       && p.Y <= Center.Y + HalfDimension.Y;
   }
-  bool Intersects(const BoundingBox& other)
+  bool Intersects(const BoundingBox& other) const
   {
     return Center.X + HalfDimension.X > other.Center.X - other.HalfDimension.X
       && Center.X - HalfDimension.X < other.Center.X + other.HalfDimension.X
@@ -51,6 +54,7 @@ public:
 class Quadtree
 {
 public:
+  virtual ~Quadtree() {}
   virtual bool Insert(const Point& p) = 0;
   virtual std::vector<Point> Query(const BoundingBox&) = 0;
   virtual BoundingBox Boundary() = 0;
