@@ -3,7 +3,7 @@ CFLAGS=-c -Wall -O -std=c++11
 
 all: quadtree
 quadtree: quadtree.o main.o
-	$(CC) main.o quadtree.o -o quadtree
+	$(CC) -pthread main.o quadtree.o -o quadtree
 main.o:
 	 $(CC) $(CFLAGS) main.cpp -o main.o
 quadtree.o:
