@@ -2,11 +2,20 @@
 #define quadtreeH
 
 #include <vector>
+#include <string>
 
 namespace quadtree 
 {
 struct Point
 {
+  Point(const double& x, const double& y)
+  : X(x)
+  , Y(y)
+  {}
+  std::string String() const
+  {
+    return std::string() + "[" + std::to_string(X) + "," + std::to_string(Y) + "]";
+  }
   double X;
   double Y;
 };
@@ -47,6 +56,10 @@ public:
       && Center.X - HalfDimension.X < other.Center.X + other.HalfDimension.X
       && Center.Y + HalfDimension.Y > other.Center.Y - other.HalfDimension.Y
       && Center.Y - HalfDimension.Y < other.Center.Y + other.HalfDimension.Y;
+  }
+  std::string String()
+  {
+    return std::string() + "[" + Center.String() + "," + HalfDimension.String() + "]";
   }
 };
 
