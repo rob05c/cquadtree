@@ -52,17 +52,32 @@ int testInsert(Quadtree* q, int points, int numThreads)
       const bool ok = q->Insert(p);
       if(!ok)
 	cout << "testInsert insert failed" << endl;
+
+      // debug
+/*
+      if(i % 100000 == 0)
+      {
+	const std::string msg = std::string() + "inserted " + std::to_string(i) + "\n";
+	cout << msg;
+      }
+*/
     }
   };
-  
+
+  cout << "inserting " << tpoints << " per thread\n";  
+
   vector<shared_ptr<thread>> threads;
   for(int i = 0, end = numThreads; i != end; ++i)
   {
+//    cout << "starting thread\n";
     threads.push_back(shared_ptr<thread>(new thread(insertPoint)));
   }
 
   for(auto i : threads)
+  {
     i->join();
+//    cout << "joined thread\n";
+  }
 
   return tpoints * numThreads;
 }
@@ -79,6 +94,10 @@ void printTree(Quadtree* q)
 
 int main(int argc, char** argv)
 {
+  // @todo cout whether unsigned long is atomic!!
+
+//  cout << sizeof(int*);
+
   auto points = DEFAULT_POINTS;
   auto threads = DEFAULT_THREADS;
 
@@ -109,8 +128,26 @@ int main(int argc, char** argv)
   const BoundingBox b = {{100, 100}, {50, 50}};
   LockfreeQuadtree q(b, NODE_CAPACITY);
 
+/*
+  auto qpoints = q.points.load();
+  if(qpoints->First == nullptr)
+    cout << "first null\n";
+  else if(qpoints->First->Next == nullptr)
+    cout << "first->next null\n";
+
+  const auto p = Point(frand()*100.0 + 50.0, frand() * 100.0 + 50.0);
+  const bool ok = q.Insert(p);
+
+  qpoints = q.points.load();
+  if(qpoints->First == nullptr)
+    cout << "2 first null\n";
+  else if(qpoints->First->Next == nullptr)
+    cout << "2 first->next null\n";
+*/
 
   const time_point<system_clock> start = system_clock::now();
+
+
 
   const int inserted = testInsert(&q, points, threads);
 
@@ -119,6 +156,7 @@ int main(int argc, char** argv)
   const int seconds_elapsed = elapsed.count();
 
   cout << "inserted " << inserted << " in " << seconds_elapsed << " seconds with " << threads << " threads." << endl;
+
 //  printTree(&q);
   return 0;
 }

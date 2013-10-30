@@ -1,9 +1,9 @@
 CC=g++
-CFLAGS=-c -Wall -O -std=c++11
+CFLAGS=-c -Wall -O3 -std=c++11 -g
 
 all: quadtree
 quadtree: quadtree.o main.o
-	$(CC) -pthread main.o quadtree.o -o quadtree
+	$(CC) -pthread -g main.o quadtree.o -o quadtree
 main.o:
 	 $(CC) $(CFLAGS) main.cpp -o main.o
 quadtree.o:

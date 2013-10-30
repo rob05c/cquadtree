@@ -18,18 +18,39 @@ public:
   virtual bool               Insert(const Point& p);
   virtual std::vector<Point> Query(const BoundingBox&);
   virtual BoundingBox        Boundary() {return boundary;}
+  bool ThreadCanComplete(); ///< @todo not sure I like this. Make gc() call until success on each func?
+
+  BoundingBox boundary; ///< @todo change to shared_ptr ?
+
 private:
   LockfreeQuadtree();
 
-  void subdivide();
-  void disperse();
-  
-  BoundingBox boundary; ///< @todo change to shared_ptr ?
   std::atomic<PointList*> points;
   std::atomic<LockfreeQuadtree*> Nw;
   std::atomic<LockfreeQuadtree*> Ne;
   std::atomic<LockfreeQuadtree*> Sw;
   std::atomic<LockfreeQuadtree*> Se;
+
+
+  void subdivide();
+  void disperse();
+  static void gc(); ///< this function is thread-specific. It collects garbage specific to the thread, not the tree.
+
+  class HazardPointer
+  {
+  public:
+    std::atomic<PointList*> Hazard; // this MUST be atomic. It could be half-changed then referenced // the hazardous pointer. Change to PointList?
+    HazardPointer* Next;
+  private:
+    std::atomic_flag active;
+  private:
+    static std::atomic<HazardPointer*> head;
+//    static std::atomic_size_t length;
+  public:
+    static HazardPointer* Head() {return head.load();}
+    static HazardPointer* Acquire();
+    static void Release(HazardPointer* p) {p->Hazard.store(nullptr);p->active.clear();}
+  };
 };
 }
 #endif // quadtreeH
