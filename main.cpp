@@ -86,10 +86,13 @@ void printTree(Quadtree* q)
 {
   vector<Point> ps = q->Query(q->Boundary());
   cout << "queried " << ps.size() << endl;
-  cout << "found ";
-  for(auto i = ps.begin(), end = ps.end(); i != end; ++i)
-    cout << "(" << i->X << " " << i->Y << "), ";
-  cout << endl;
+  if(ps.size() < 1000)
+  {
+    cout << "found ";
+    for(auto i = ps.begin(), end = ps.end(); i != end; ++i)
+      cout << "(" << i->X << " " << i->Y << "), ";
+    cout << endl;
+  }
 }
 
 int main(int argc, char** argv)
@@ -118,8 +121,8 @@ int main(int argc, char** argv)
   cout << std::fixed;
 
   cout << "threads: " << threads << endl;
-  cout << "points: " << points << endl << endl;
-  cout << "capacity: " << NODE_CAPACITY << endl << endl;
+  cout << "points: " << points << endl;
+  cout << "capacity: " << NODE_CAPACITY << endl;
 
   //#if !__has_feature(cxx_atomic)
   //  cout << "no atomic :(" << endl;
@@ -157,6 +160,6 @@ int main(int argc, char** argv)
 
   cout << "inserted " << inserted << " in " << seconds_elapsed << " seconds with " << threads << " threads." << endl;
 
-//  printTree(&q);
+  printTree(&q);
   return 0;
 }
