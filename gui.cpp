@@ -141,7 +141,7 @@ void printGui(const string& msg)
   box(stdscr, 0, 0);
   mvprintw(window_height, window_width / 2 - msg.size() / 2, msg.c_str());
   mvprintw(window_height, 1,"%s", "Quadtree demo ");
-  const string msgExit = " Press any key to exit";
+  const string msgExit = " Press 'q' to exit";
   mvprintw(window_height, window_width - msgExit.size() - 1, msgExit.c_str());
 }
 
@@ -163,12 +163,69 @@ string drawTree(Quadtree* q)
   return string() + "points: " + to_string(points.size());
 }
 
+
+/// broken. Getting the current char doesn't work.
+void drawPoint(Point* p)
+{
+
+  const string currentChar = string(1, mvinch(p->Y, p->X));
+  string newChar = NUM[0];
+  for(size_t i = 0, end = NUM_LEN; i != end; ++i)
+  {
+    if(currentChar == string(NUM[i]))
+    {
+      newChar =  i + 1 > NUM_LEN ? MANY : NUM[i + 1];
+      break;
+    }
+  }
+  mvprintw((int)p->Y, (int)p->X, newChar.c_str());
+//  printGui((string() + "X" + currentChar + "X").c_str());
+}
+
+void insertPoint(int y, int x, Quadtree* q)
+{
+  Point p = {(double)x, (double)y};
+  q->Insert(p);
+  int cx;
+  int cy;
+  getyx(stdscr, cy, cx);
+  drawTree(q);
+  move(cy, cx);
+}
+
+void handleMouse(Quadtree* q)
+{
+  MEVENT e;
+  getmouse(&e);
+  insertPoint(e.y, e.x, q);
+  refresh();
+}
+
+void handleKey(int c, Quadtree* q)
+{
+  int x;
+  int y;
+  getyx(stdscr, y, x);
+  if(c == KEY_UP)
+    move(y-1, x);
+  else if(c == KEY_DOWN)
+    move(y+1, x);
+  else if(c == KEY_RIGHT)
+    move(y, x+1);
+  else if(c == KEY_LEFT)
+    move(y, x-1);
+  else if(c == ' ')
+    insertPoint(y, x, q);
+  refresh();
+}
+
 int main(int argc, char** argv)
 {
   setlocale(LC_ALL, "");
   initscr();
   noecho();
-
+  cbreak();
+  keypad(stdscr, true);
   getmaxyx(stdscr, window_height, window_width);
   --window_height;
 
@@ -199,9 +256,22 @@ int main(int argc, char** argv)
   testInsert(&q, points, threads);
   const string treeMsg = drawTree(&q);
   printGui(treeMsg);
-  curs_set(0); // hide cursor
+//  curs_set(0); // hide cursor
+  move(0,0);
   refresh();
-  getch();
+
+  mousemask(BUTTON1_PRESSED, NULL);
+  while(true)
+  {
+    const int c = getch();
+    if(c == KEY_MOUSE)
+      handleMouse(&q);
+    else if(c == 'q')
+      break;
+    else
+      handleKey(c, &q);
+  }
+
   endwin();
   return 0;
 }
