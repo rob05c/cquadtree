@@ -26,7 +26,7 @@ namespace quadtree
 {
 std::atomic<LockfreeQuadtree::HazardPointer*> LockfreeQuadtree::HazardPointer::head;
 
-LockfreeQuadtree::LockfreeQuadtree(BoundingBox boundary_, int capacity_)
+LockfreeQuadtree::LockfreeQuadtree(BoundingBox boundary_, size_t capacity_)
   : boundary(boundary_)
   , points(new PointList(capacity_))
   , Nw(nullptr)
@@ -39,7 +39,7 @@ bool LockfreeQuadtree::Insert(const Point& p)
 {
   if(!boundary.Contains(p))
     return false;
-
+  // MIN means the subdivision has reached the minimum double precision. We can't subdivide anymore.
   HazardPointer* hazardPointer = HazardPointer::Acquire(); // @todo create a finaliser/whileinscope class for HazardPointers.
   while(true)
   {
@@ -93,6 +93,8 @@ bool LockfreeQuadtree::Insert(const Point& p)
     cout << ne->Boundary().String() << " and " << endl;
     cout << sw->Boundary().String() << " and " << endl;
     cout << se->Boundary().String() << endl << endl;
+    
+    cout << this << " " << nw << " " << ne << " " << sw << " " << se << endl;
   }
 
   return ok;
@@ -106,7 +108,7 @@ void LockfreeQuadtree::subdivide()
   if(oldPoints == nullptr)
     return;
 
-  const auto capacity = oldPoints->Capacity;
+  size_t capacity = oldPoints->Capacity;
 
   HazardPointer::Release(hazardPointer);
 
@@ -116,6 +118,11 @@ void LockfreeQuadtree::subdivide()
     disperse(); //debug
     return;
   }
+
+  const double dx = 0.000001;
+  // don't subdivide further if we reach the limits of double precision
+  if(fabs(boundary.HalfDimension.X/2.0) < dx || fabs(boundary.HalfDimension.Y/2.0) < dx)
+    capacity = std::numeric_limits<size_t>::max();
 
   const Point newHalf = {boundary.HalfDimension.X / 2.0, boundary.HalfDimension.Y / 2.0}; 
   LockfreeQuadtree* lval = nullptr;

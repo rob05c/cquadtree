@@ -12,7 +12,7 @@ class LockfreeQuadtree : public Quadtree
 {
 public:
   // @todo create destructor, that deletes all the newed children
-  LockfreeQuadtree(BoundingBox boundary, int capacity);
+  LockfreeQuadtree(BoundingBox boundary, size_t capacity);
   virtual ~LockfreeQuadtree() {}
 
   virtual bool               Insert(const Point& p);
@@ -22,6 +22,13 @@ public:
 
   BoundingBox boundary; ///< @todo change to shared_ptr ?
 
+  // @todo rename these and vars, swap case
+  // this are here so the gui can get their boundaries.
+  LockfreeQuadtree* nw() {return Nw.load();}
+  LockfreeQuadtree* ne() {return Ne.load();}
+  LockfreeQuadtree* sw() {return Sw.load();}
+  LockfreeQuadtree* se() {return Se.load();}
+
 private:
   LockfreeQuadtree();
 
@@ -30,7 +37,6 @@ private:
   std::atomic<LockfreeQuadtree*> Ne;
   std::atomic<LockfreeQuadtree*> Sw;
   std::atomic<LockfreeQuadtree*> Se;
-
 
   void subdivide();
   void disperse();

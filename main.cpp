@@ -27,7 +27,7 @@ using quadtree::Point;
 using quadtree::Quadtree;
 using quadtree::LockfreeQuadtree;
 
-const unsigned int NODE_CAPACITY = 100;
+const unsigned int NODE_CAPACITY = 4;
 const unsigned int DEFAULT_THREADS = max(thread::hardware_concurrency(), 1u);
 const unsigned int DEFAULT_POINTS = 10000000;
 
@@ -84,8 +84,15 @@ int testInsert(Quadtree* q, int points, int numThreads)
 
 void printTree(Quadtree* q)
 {
+  const time_point<system_clock> start = system_clock::now();
+
   vector<Point> ps = q->Query(q->Boundary());
-  cout << "queried " << ps.size() << endl;
+
+  const time_point<system_clock> end = system_clock::now();
+  const duration<double> elapsed = end - start;
+  const int seconds_elapsed = elapsed.count();
+  cout << "queried " << ps.size() << " in " << seconds_elapsed << " seconds." << endl;
+
   if(ps.size() < 1000)
   {
     cout << "found ";
@@ -148,9 +155,8 @@ int main(int argc, char** argv)
     cout << "2 first->next null\n";
 */
 
+
   const time_point<system_clock> start = system_clock::now();
-
-
 
   const int inserted = testInsert(&q, points, threads);
 
@@ -161,5 +167,14 @@ int main(int argc, char** argv)
   cout << "inserted " << inserted << " in " << seconds_elapsed << " seconds with " << threads << " threads." << endl;
 
   printTree(&q);
+
+
+/*  
+  cout << "mass insert...\n";
+  const auto p = Point(frand()*100.0 + 50.0, frand() * 100.0 + 50.0);
+  for(int i = 0, end = NODE_CAPACITY + 1; i != end; ++i)
+    q.Insert(p);
+//  printTree(&q);
+*/
   return 0;
 }

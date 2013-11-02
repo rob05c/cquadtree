@@ -32,10 +32,10 @@ public:
 class PointList
 {
 public:
-  PointList(int capacity) : Capacity(capacity), First(nullptr), Length(0) {}
-  int Capacity;
+  PointList(size_t capacity) : Capacity(capacity), First(nullptr), Length(0) {}
+  size_t Capacity;
   PointListNode* First;
-  int Length; // cache for speed; we could calculate it in O(n) by iterating thru the nodes
+  size_t Length; // cache for speed; we could calculate it in O(n) by iterating thru the nodes
 };
 
 class BoundingBox

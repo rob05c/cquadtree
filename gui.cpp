@@ -32,7 +32,7 @@ using quadtree::Point;
 using quadtree::Quadtree;
 using quadtree::LockfreeQuadtree;
 
-const unsigned int NODE_CAPACITY = 100;
+const unsigned int NODE_CAPACITY = 4;
 const unsigned int DEFAULT_THREADS = max(thread::hardware_concurrency(), 1u);
 const unsigned int DEFAULT_POINTS = 50000;
 
@@ -106,6 +106,8 @@ inline const char* numstr(const size_t& n)
 
 int window_height = 0;
 int window_width = 0;
+
+bool draw_boundary = false;
 }
 
 
@@ -138,20 +140,56 @@ int testInsert(Quadtree* q, int points, int numThreads)
 /// prints basic GUI that should always be visible
 void printGui(const string& msg)
 {
-  box(stdscr, 0, 0);
+//  box(stdscr, 0, 0);
   mvprintw(window_height, window_width / 2 - msg.size() / 2, msg.c_str());
   mvprintw(window_height, 1,"%s", "Quadtree demo ");
   const string msgExit = " Press 'q' to exit";
   mvprintw(window_height, window_width - msgExit.size() - 1, msgExit.c_str());
 }
 
+void drawBoundary(const BoundingBox& b)
+{
+  int sx;
+  int sy;
+  getyx(stdscr, sy, sx);
+
+  const int length = (int)(b.HalfDimension.Y * 2);
+  const int width = (int)(b.HalfDimension.X * 2);
+
+  int x = (int)(b.Center.X - b.HalfDimension.X);
+  int y = (int)(b.Center.Y - b.HalfDimension.Y);
+  move(y, x);
+  vline('|', length);
+  hline('-', width);
+  move(y, x);
+  hline('-', width);
+  vline('|', length);
+  move(sy, sx);
+}
+
+/// recursively draws subtree borders.
+void drawTreeBorders(Quadtree* q)
+{
+  if(q == nullptr)
+    return;
+  int x;
+  int y;
+  getyx(stdscr, y, x);
+  drawBoundary(q->Boundary());
+
+  LockfreeQuadtree* lq = (LockfreeQuadtree*)q; ///< @todo fix this by adding subtree funcs to Quadtree
+  drawTreeBorders(lq->nw());
+  drawTreeBorders(lq->ne());
+  drawTreeBorders(lq->sw());
+  drawTreeBorders(lq->se());
+  move(y, x);
+}
+
 /// Does NOT refresh the window.
 /// @return tree info message
 string drawTree(Quadtree* q)
 {
-
   vector<Point> points = q->Query(q->Boundary());
-
   unordered_map<long, unordered_map<long, size_t>> pointMap;
   for(auto i = points.begin(), end = points.end(); i != end; ++i)
     ++pointMap[(int)i->X][(int)i->Y];
@@ -159,6 +197,9 @@ string drawTree(Quadtree* q)
   for(auto i = pointMap.begin(), end = pointMap.end(); i != end; ++i)
     for(auto j = i->second.begin(), jend = i->second.end(); j != jend; ++j)
       mvprintw(j->first, i->first, numstr(j->second));
+
+  if(draw_boundary)
+    drawTreeBorders(q);
 
   return string() + "points: " + to_string(points.size());
 }
@@ -245,6 +286,12 @@ int main(int argc, char** argv)
     const auto t = static_cast<unsigned int>(strtoul(argv[2], 0, 10));
     if(t > 0)
       threads = t;
+  }
+
+  if(argc > 3)
+  {
+    const auto b = static_cast<unsigned int>(strtoul(argv[2], 0, 10));
+    draw_boundary = (b != 0);
   }
 
   srand(time(nullptr));
