@@ -32,7 +32,7 @@ using quadtree::Point;
 using quadtree::Quadtree;
 using quadtree::LockfreeQuadtree;
 
-const unsigned int NODE_CAPACITY = 4;
+const unsigned int DEFAULT_CAPACITY = 4;
 const unsigned int DEFAULT_THREADS = max(thread::hardware_concurrency(), 1u);
 const unsigned int DEFAULT_POINTS = 50000;
 
@@ -153,17 +153,29 @@ void drawBoundary(const BoundingBox& b)
   int sy;
   getyx(stdscr, sy, sx);
 
-  const int length = (int)(b.HalfDimension.Y * 2);
+  const int height = (int)(b.HalfDimension.Y * 2);
   const int width = (int)(b.HalfDimension.X * 2);
+
+/*
+    ACS_ULCORNER,
+    ACS_URCORNER,
+    ACS_LLCORNER,
+    ACS_LRCORNER.
+    ACS_PLUS,
+*/
 
   int x = (int)(b.Center.X - b.HalfDimension.X);
   int y = (int)(b.Center.Y - b.HalfDimension.Y);
-  move(y, x);
-  vline('|', length);
-  hline('-', width);
-  move(y, x);
-  hline('-', width);
-  vline('|', length);
+  mvaddch(y, x, ACS_PLUS); //ul
+  mvvline(y+1, x, ACS_VLINE, height-1);
+  mvaddch(y+height, x, ACS_PLUS); //ll
+
+  mvhline(y+height, x+1, ACS_HLINE, width - 1);
+  mvaddch(y+height, x+width, ACS_PLUS); //lr
+
+  mvhline(y, x+1, ACS_HLINE, width-1);
+  mvaddch(y, x+width, ACS_PLUS); //ur
+  mvvline(y+1, x+width, ACS_VLINE, height-1);
   move(sy, sx);
 }
 
@@ -275,11 +287,18 @@ int main(int argc, char** argv)
 
   auto points = DEFAULT_POINTS;
   auto threads = DEFAULT_THREADS;
+  auto capacity = DEFAULT_CAPACITY;
   if(argc > 1)
   {
     const auto p = static_cast<unsigned int>(strtoul(argv[1], 0, 10));
     if(p > 0)
       points = p;
+    else
+    {
+      endwin();
+      cout << "usage: quadtree points threads capacity draw_boundary\n";
+      return 0;
+    }
   }
   if(argc > 2)
   {
@@ -287,10 +306,15 @@ int main(int argc, char** argv)
     if(t > 0)
       threads = t;
   }
-
   if(argc > 3)
   {
-    const auto b = static_cast<unsigned int>(strtoul(argv[2], 0, 10));
+    const auto c = static_cast<unsigned int>(strtoul(argv[3], 0, 10));
+    if(c > 0)
+      capacity = c;
+  }
+  if(argc > 4)
+  {
+    const auto b = static_cast<unsigned int>(strtoul(argv[4], 0, 10));
     draw_boundary = (b != 0);
   }
 
@@ -298,7 +322,7 @@ int main(int argc, char** argv)
 
   Point center = {(double)(window_width / 2), (double)(window_height / 2)};
   const BoundingBox b = {center, center}; // half-dimension is same as center, for our screen-size box
-  LockfreeQuadtree q(b, NODE_CAPACITY);
+  LockfreeQuadtree q(b, capacity);
 
   testInsert(&q, points, threads);
   const string treeMsg = drawTree(&q);

@@ -39,7 +39,6 @@ bool LockfreeQuadtree::Insert(const Point& p)
 {
   if(!boundary.Contains(p))
     return false;
-  // MIN means the subdivision has reached the minimum double precision. We can't subdivide anymore.
   HazardPointer* hazardPointer = HazardPointer::Acquire(); // @todo create a finaliser/whileinscope class for HazardPointers.
   while(true)
   {
@@ -51,7 +50,6 @@ bool LockfreeQuadtree::Insert(const Point& p)
     newPoints->First = new PointListNode(p, oldPoints->First);
     newPoints->Length = oldPoints->Length + 1;
     const bool ok = points.compare_exchange_strong(oldPoints, newPoints);
-//    while(points.load() == oldPoints); // necesary?
     hazardPointer->Hazard.store(nullptr);
 
     if(ok)
@@ -73,31 +71,8 @@ bool LockfreeQuadtree::Insert(const Point& p)
   if(localPoints != nullptr)
     subdivide();
 
-//  while(Nw.load() == nullptr);
-//  while(Ne.load() == nullptr);
-//  while(Sw.load() == nullptr);
-//  while(Se.load() == nullptr);
-
   // these will each need Hazard Pointers if it's ever possible for a subtree to be deleted
-  LockfreeQuadtree* nw = Nw.load();
-  LockfreeQuadtree* ne = Ne.load();
-  LockfreeQuadtree* sw = Sw.load();
-  LockfreeQuadtree* se = Se.load();
-  const bool ok = nw->Insert(p) || ne->Insert(p) || sw->Insert(p) || se->Insert(p);
-
-  if(!ok) // debug
-  {
-    cout << "insert failed" << endl;
-    cout << p.String() << " inside " << boundary.String() << " but outside " << endl;
-    cout << nw->Boundary().String() << " and " << endl;
-    cout << ne->Boundary().String() << " and " << endl;
-    cout << sw->Boundary().String() << " and " << endl;
-    cout << se->Boundary().String() << endl << endl;
-    
-    cout << this << " " << nw << " " << ne << " " << sw << " " << se << endl;
-  }
-
-  return ok;
+  return Nw.load()->Insert(p) || Ne.load()->Insert(p) || Sw.load()->Insert(p) || Se.load()->Insert(p);
 }
 
 void LockfreeQuadtree::subdivide()
@@ -167,18 +142,12 @@ void LockfreeQuadtree::subdivide()
     while(Sw.load() == nullptr);
   }
 
-//  while(Nw.load() == nullptr);
-//  while(Ne.load() == nullptr);
-//  while(Sw.load() == nullptr);
-//  while(Se.load() == nullptr);
-
   disperse();
 }
 
 
 void LockfreeQuadtree::disperse()
 {
-//  const auto tid = std::to_string(std::hash<std::thread::id>()(std::this_thread::get_id()));
   PointList* oldPoints;
   HazardPointer* hazardPointer = HazardPointer::Acquire(); // @todo pass this rather than expensively reacquiring
   while(true)
@@ -191,14 +160,6 @@ void LockfreeQuadtree::disperse()
     
     PointList* newPoints = new PointList(0); // set the capacity to 0, so no one else tries to add
 
-    //debug
-    if(oldPoints->Length == 0)
-      cout << "op0\n";
-
-    // debug
-    if(oldPoints->First == nullptr)
-      cout << "opf0 " << oldPoints->Length << endl;
-
     Point p = oldPoints->First->NodePoint;
     newPoints->First = oldPoints->First->Next;
     newPoints->Length = oldPoints->Length - 1;
@@ -206,32 +167,17 @@ void LockfreeQuadtree::disperse()
     /// @todo we must atomically swap the new points, and insert the point into the child.
     ///       we can do this by making Query() help in the dispersal
     bool ok = points.compare_exchange_strong(oldPoints, newPoints);
-//    while(points.load() == oldPoints); //necessary?
     hazardPointer->Hazard.store(nullptr);
-
     if(!ok)
     {
       delete newPoints;
-//      hazardPointer->Hazard.store(nullptr);
       continue;
     }
 
     deleteWithNodeList.push_back(oldPoints);
     gc();
 
-
-    // shouldn't be necessary.
-//    while(Nw.load() == nullptr);
-//    while(Ne.load() == nullptr);
-//    while(Se.load() == nullptr);
-//    while(Sw.load() == nullptr);
-
-    LockfreeQuadtree* nw = Nw.load(); // @todo merge this with while, to avoid calling load twice
-    LockfreeQuadtree* ne = Ne.load();
-    LockfreeQuadtree* se = Se.load();
-    LockfreeQuadtree* sw = Sw.load();
-
-    ok = nw->Insert(p) || ne->Insert(p) || sw->Insert(p) || se->Insert(p);
+    ok = Nw.load()->Insert(p) || Ne.load()->Insert(p) || Sw.load()->Insert(p) || Se.load()->Insert(p);
   }
   HazardPointer::Release(hazardPointer); /// @todo create a finaliser. This is dangerous. I don't like it. Not one bit.
 
@@ -239,6 +185,7 @@ void LockfreeQuadtree::disperse()
     points.store(nullptr);
 }
 
+/// @todo fix this to assist subdivide
 vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
 {
   vector<Point> found;
@@ -307,10 +254,6 @@ void LockfreeQuadtree::gc()
     if(!std::binary_search(hazards.begin(), hazards.end(), *i))
     {
       delete (*i);
-//      cout << "deleted\n";
-//      if(&*i != &deleteList.back())
-//	*i = deleteList.back();
-//      deleteList.pop_back();
       i = deleteList.erase(i);
     }
     else
@@ -322,11 +265,7 @@ void LockfreeQuadtree::gc()
     {
       delete (*i)->First;
       delete (*i);
-//      cout << "deletedW\n";
       i = deleteWithNodeList.erase(i);
-//      if(&*i != &deleteList.back())
-//	*i = deleteList.back();
-//      deleteList.pop_back();
     }
     else
       ++i;
@@ -349,15 +288,10 @@ LockfreeQuadtree::HazardPointer* LockfreeQuadtree::HazardPointer::Acquire()
       continue;
     return p;
   }
-
   // no old released HazardPointers. Allocate a new one
-//  ++length; // std::atomic overloads the ++ operator
-
   HazardPointer* p = new HazardPointer();
   p->active.test_and_set();
   p->Hazard.store(nullptr);
-
-      
   /// @todo change this to a for loop. Because I like for.
   HazardPointer* old;
   do {
@@ -366,6 +300,4 @@ LockfreeQuadtree::HazardPointer* LockfreeQuadtree::HazardPointer::Acquire()
   } while(!LockfreeQuadtree::HazardPointer::head.compare_exchange_strong(old, p));
   return p;
 }
-
 }
-

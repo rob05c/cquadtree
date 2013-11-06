@@ -2,6 +2,7 @@
 #include <vector>
 #include "quadtree.h"
 #include "free_quadtree.h"
+#include "lock_quadtree.h"
 #include <atomic>
 #include <memory>
 #include <thread>
@@ -26,6 +27,7 @@ using quadtree::BoundingBox;
 using quadtree::Point;
 using quadtree::Quadtree;
 using quadtree::LockfreeQuadtree;
+using quadtree::LockQuadtree;
 
 const unsigned int NODE_CAPACITY = 4;
 const unsigned int DEFAULT_THREADS = max(thread::hardware_concurrency(), 1u);
@@ -124,6 +126,15 @@ int main(int argc, char** argv)
       threads = t;
   }
 
+  bool lockfree = true;
+  if(argc > 3)
+  {
+    const auto t = static_cast<unsigned int>(strtoul(argv[3], 0, 10));
+    lockfree = t > 0;
+  }
+
+  cout << (lockfree ? "Lock Free\n" : "Lock Based\n");
+
   srand(time(nullptr));
   cout << std::fixed;
 
@@ -136,7 +147,7 @@ int main(int argc, char** argv)
   //#endif
 
   const BoundingBox b = {{100, 100}, {50, 50}};
-  LockfreeQuadtree q(b, NODE_CAPACITY);
+  auto q = std::unique_ptr<Quadtree>(lockfree ? (Quadtree*)new LockfreeQuadtree(b, NODE_CAPACITY) : (Quadtree*)new LockQuadtree(b, NODE_CAPACITY));
 
 /*
   auto qpoints = q.points.load();
@@ -158,7 +169,7 @@ int main(int argc, char** argv)
 
   const time_point<system_clock> start = system_clock::now();
 
-  const int inserted = testInsert(&q, points, threads);
+  const int inserted = testInsert(q.get(), points, threads);
 
   const time_point<system_clock> end = system_clock::now();
   const duration<double> elapsed = end - start;
@@ -166,8 +177,7 @@ int main(int argc, char** argv)
 
   cout << "inserted " << inserted << " in " << seconds_elapsed << " seconds with " << threads << " threads." << endl;
 
-  printTree(&q);
-
+  printTree(q.get());
 
 /*  
   cout << "mass insert...\n";
