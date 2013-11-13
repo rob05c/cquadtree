@@ -185,7 +185,7 @@ void LockfreeQuadtree::disperse()
     points.store(nullptr);
 }
 
-/// @todo fix this to assist subdivide
+/// @todo change this to assist in the subdivide & dispersion.
 vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
 {
   vector<Point> found;
@@ -196,6 +196,7 @@ vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
   HazardPointer* hazardPointer = HazardPointer::Acquire();
   hazardPointer->Hazard.store(points.load());
   PointList* localPoints = hazardPointer->Hazard.load();
+  const bool previouslySubdivided = localPoints == nullptr;
   if(localPoints != nullptr)
   {
     for(auto node = localPoints->First; node != nullptr; node = node->Next)
@@ -208,29 +209,40 @@ vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
 
   if(Nw != nullptr)
   {
+    if(!previouslySubdivided && points.load() == nullptr)
+      return Query(b); // this is an optimization. Prevents unnecessary child loading, but not strictly necessary.
     LockfreeQuadtree* q = Nw.load();
     vector<Point> f = q->Query(b);
     found.insert(found.end(), f.begin(), f.end());
   }
   if(Ne != nullptr)
   {
+    if(!previouslySubdivided && points.load() == nullptr)
+      return Query(b); // optimization
     LockfreeQuadtree* q = Ne.load();
     vector<Point> f = q->Query(b);
     found.insert(found.end(), f.begin(), f.end());
   }
   if(Sw != nullptr)
   {
+    if(!previouslySubdivided && points.load() == nullptr)
+      return Query(b); // optimization
     LockfreeQuadtree* q = Sw.load();
     vector<Point> f = q->Query(b);
     found.insert(found.end(), f.begin(), f.end());
   }
   if(Se != nullptr)
   {
+    if(!previouslySubdivided && points.load() == nullptr)
+      return Query(b); // optimization
     LockfreeQuadtree* q = Se.load();
     vector<Point> f = q->Query(b);
     found.insert(found.end(), f.begin(), f.end());
   }
 
+  // if the tree subdivided while we were querying, redo the query. We probably missed some points as they were being moved.
+  if(!previouslySubdivided && points.load() == nullptr)
+    return Query(b); // absolutely necessary
   return found;
 }
 

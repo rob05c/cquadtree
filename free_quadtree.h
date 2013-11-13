@@ -23,7 +23,7 @@ public:
   BoundingBox boundary; ///< @todo change to shared_ptr ?
 
   // @todo rename these and vars, swap case
-  // this are here so the gui can get their boundaries.
+  // these are here so the gui can get their boundaries.
   LockfreeQuadtree* nw() {return Nw.load();}
   LockfreeQuadtree* ne() {return Ne.load();}
   LockfreeQuadtree* sw() {return Sw.load();}
