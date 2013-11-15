@@ -30,6 +30,7 @@ using quadtree::LockfreeQuadtree;
 using quadtree::LockQuadtree;
 
 const unsigned int NODE_CAPACITY = 4;
+//const unsigned int NODE_CAPACITY = 10000000;
 const unsigned int DEFAULT_THREADS = max(thread::hardware_concurrency(), 1u);
 const unsigned int DEFAULT_POINTS = 10000000;
 
@@ -54,32 +55,66 @@ int testInsert(Quadtree* q, int points, int numThreads)
       const bool ok = q->Insert(p);
       if(!ok)
 	cout << "testInsert insert failed" << endl;
-
-      // debug
-/*
-      if(i % 100000 == 0)
-      {
-	const std::string msg = std::string() + "inserted " + std::to_string(i) + "\n";
-	cout << msg;
-      }
-*/
     }
+  };
+
+
+  cout << "query-inserting " << tpoints << " per thread\n";  
+
+  vector<shared_ptr<thread>> threads;
+  for(int i = 0, end = numThreads; i != end; ++i)
+    threads.push_back(shared_ptr<thread>(new thread(insertPoint)));
+
+  for(auto i : threads)
+    i->join();
+
+  return tpoints * numThreads;
+}
+
+
+/// @param q the quadtree to insert into
+/// @param points the number of points to insert. Actual points inserted is floor(points/threads)/threads
+/// @param threads the number of threads to use to insert in parallel
+/// @return the number of points inserted. This will equal floor(points/threads)*threads, not points
+int testInsertQuery(Quadtree* q, int points, int numThreads)
+{
+  shared_ptr<std::atomic<bool>> doneInserting = shared_ptr<atomic<bool>>(new std::atomic<bool>());
+  doneInserting->store(false);
+
+  const auto tpoints = points / numThreads;
+  const auto insertPoint = [tpoints, q] () {
+    for(int i = 0, end = tpoints; i != end; ++i)
+    {
+      const auto p = Point(frand()*100.0 + 50.0, frand() * 100.0 + 50.0);
+      const bool ok = q->Insert(p);
+      if(!ok)
+	cout << "testInsert insert failed" << endl;
+    }
+    q->Query(q->Boundary());
+  };
+
+  // not really forever
+  const auto foreverQuery = [q, doneInserting] () {
+    while(doneInserting->load() == false)
+      q->Query(q->Boundary());
   };
 
   cout << "inserting " << tpoints << " per thread\n";  
 
+  vector<shared_ptr<thread>> queryThreads;
+  for(int i = 0, end = 1; i != end; ++i)
+    queryThreads.push_back(shared_ptr<thread>(new thread(foreverQuery)));
+
   vector<shared_ptr<thread>> threads;
   for(int i = 0, end = numThreads; i != end; ++i)
-  {
-//    cout << "starting thread\n";
     threads.push_back(shared_ptr<thread>(new thread(insertPoint)));
-  }
 
   for(auto i : threads)
-  {
     i->join();
-//    cout << "joined thread\n";
-  }
+
+  doneInserting->store(true);
+  for(auto i : queryThreads)
+    i->join();
 
   return tpoints * numThreads;
 }
@@ -116,6 +151,11 @@ int main(int argc, char** argv)
   if(argc > 1)
   {
     const auto p = static_cast<unsigned int>(strtoul(argv[1], 0, 10));
+    if(p == 0)
+    {
+      cout << "Usage: quadtree points threads lockfree\n";
+      return 0;
+    }
     if(p > 0)
       points = p;
   }
@@ -149,27 +189,9 @@ int main(int argc, char** argv)
   const BoundingBox b = {{100, 100}, {50, 50}};
   auto q = std::unique_ptr<Quadtree>(lockfree ? (Quadtree*)new LockfreeQuadtree(b, NODE_CAPACITY) : (Quadtree*)new LockQuadtree(b, NODE_CAPACITY));
 
-/*
-  auto qpoints = q.points.load();
-  if(qpoints->First == nullptr)
-    cout << "first null\n";
-  else if(qpoints->First->Next == nullptr)
-    cout << "first->next null\n";
-
-  const auto p = Point(frand()*100.0 + 50.0, frand() * 100.0 + 50.0);
-  const bool ok = q.Insert(p);
-
-  qpoints = q.points.load();
-  if(qpoints->First == nullptr)
-    cout << "2 first null\n";
-  else if(qpoints->First->Next == nullptr)
-    cout << "2 first->next null\n";
-*/
-
-
   const time_point<system_clock> start = system_clock::now();
 
-  const int inserted = testInsert(q.get(), points, threads);
+  const int inserted = testInsertQuery(q.get(), points, threads);
 
   const time_point<system_clock> end = system_clock::now();
   const duration<double> elapsed = end - start;
@@ -179,12 +201,5 @@ int main(int argc, char** argv)
 
   printTree(q.get());
 
-/*  
-  cout << "mass insert...\n";
-  const auto p = Point(frand()*100.0 + 50.0, frand() * 100.0 + 50.0);
-  for(int i = 0, end = NODE_CAPACITY + 1; i != end; ++i)
-    q.Insert(p);
-//  printTree(&q);
-*/
   return 0;
 }
