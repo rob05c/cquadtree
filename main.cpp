@@ -79,7 +79,9 @@ int testInsert(Quadtree* q, int points, int numThreads)
 int testInsertQuery(Quadtree* q, int points, int numThreads)
 {
   shared_ptr<std::atomic<bool>> doneInserting = shared_ptr<atomic<bool>>(new std::atomic<bool>());
+  shared_ptr<std::atomic<size_t>> numQueries = shared_ptr<atomic<size_t>>(new std::atomic<size_t>());
   doneInserting->store(false);
+  numQueries->store(0u);
 
   const auto tpoints = points / numThreads;
   const auto insertPoint = [tpoints, q] () {
@@ -94,9 +96,12 @@ int testInsertQuery(Quadtree* q, int points, int numThreads)
   };
 
   // not really forever
-  const auto foreverQuery = [q, doneInserting] () {
-    while(doneInserting->load() == false)
+  const auto foreverQuery = [q, doneInserting, numQueries] () {
+    while(doneInserting->load() == false) 
+    {
       q->Query(q->Boundary());
+      ++(*numQueries.get());
+    }
   };
 
   cout << "inserting " << tpoints << " per thread\n";  
@@ -116,6 +121,7 @@ int testInsertQuery(Quadtree* q, int points, int numThreads)
   for(auto i : queryThreads)
     i->join();
 
+  cout << "queries: " << std::to_string(numQueries.get()->load()) << endl;
   return tpoints * numThreads;
 }
 
@@ -191,7 +197,7 @@ int main(int argc, char** argv)
 
   const time_point<system_clock> start = system_clock::now();
 
-  const int inserted = testInsertQuery(q.get(), points, threads);
+  const int inserted = testInsert(q.get(), points, threads);
 
   const time_point<system_clock> end = system_clock::now();
   const duration<double> elapsed = end - start;
