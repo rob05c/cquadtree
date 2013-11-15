@@ -4,8 +4,6 @@
 #include "free_quadtree.h"
 #include <atomic>
 #include <memory>
-#include <functional> //debug
-#include <thread> //debug
 #include <algorithm>
 
 namespace
@@ -33,7 +31,9 @@ LockfreeQuadtree::LockfreeQuadtree(BoundingBox boundary_, size_t capacity_)
   , Ne(nullptr)
   , Sw(nullptr)
   , Se(nullptr)
-{}
+{
+  subdividing.store(false);
+}
 
 bool LockfreeQuadtree::Insert(const Point& p)
 {
@@ -42,7 +42,8 @@ bool LockfreeQuadtree::Insert(const Point& p)
   HazardPointer* hazardPointer = HazardPointer::Acquire(); // @todo create a finaliser/whileinscope class for HazardPointers.
   while(true)
   {
-    hazardPointer->Hazard.store(points.load());
+    while(hazardPointer->Hazard.load() != points.load())
+      hazardPointer->Hazard.store(points.load());
     PointList* oldPoints = hazardPointer->Hazard.load();
     if(oldPoints == nullptr || oldPoints->Length >= oldPoints->Capacity)
       break;
@@ -77,11 +78,15 @@ bool LockfreeQuadtree::Insert(const Point& p)
 
 void LockfreeQuadtree::subdivide()
 {
+  subdividing.store(true);
   HazardPointer* hazardPointer = HazardPointer::Acquire(); // @todo pass this rather than expensively reacquiring
-  hazardPointer->Hazard.store(points.load());
+  while(hazardPointer->Hazard.load() != points.load())
+    hazardPointer->Hazard.store(points.load());
   PointList* oldPoints = hazardPointer->Hazard.load();
   if(oldPoints == nullptr)
+  {
     return;
+  }
 
   size_t capacity = oldPoints->Capacity;
 
@@ -90,7 +95,7 @@ void LockfreeQuadtree::subdivide()
 
   if(capacity == 0) // if cap=0 someone beat us here. Skip to dispersing.
   {
-    disperse(); //debug
+    disperse();
     return;
   }
 
@@ -145,14 +150,14 @@ void LockfreeQuadtree::subdivide()
   disperse();
 }
 
-
 void LockfreeQuadtree::disperse()
 {
   PointList* oldPoints;
   HazardPointer* hazardPointer = HazardPointer::Acquire(); // @todo pass this rather than expensively reacquiring
   while(true)
   {
-    hazardPointer->Hazard.store(points.load());
+    while(hazardPointer->Hazard.load() != points.load())
+      hazardPointer->Hazard.store(points.load());
     oldPoints = hazardPointer->Hazard.load();
 
     if(oldPoints == nullptr || oldPoints->Length == 0)
@@ -185,7 +190,7 @@ void LockfreeQuadtree::disperse()
     points.store(nullptr);
 }
 
-/// @todo change this to assist in the subdivide & dispersion.
+/// @todo test this with and without optimisations.
 vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
 {
   vector<Point> found;
@@ -193,56 +198,95 @@ vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
   if(!boundary.Intersects(b))
     return found;
 
+
+
   HazardPointer* hazardPointer = HazardPointer::Acquire();
-  hazardPointer->Hazard.store(points.load());
+  while(hazardPointer->Hazard.load() != points.load())
+    hazardPointer->Hazard.store(points.load());
   PointList* localPoints = hazardPointer->Hazard.load();
   const bool previouslySubdivided = localPoints == nullptr;
+
+  
+  if(!previouslySubdivided && subdividing.load() == true)
+  {
+//    cout << "query helping\n";
+    HazardPointer::Release(hazardPointer);
+    subdivide();
+    return Query(b);
+  }
+
   if(localPoints != nullptr)
   {
     for(auto node = localPoints->First; node != nullptr; node = node->Next)
     {
-      if(b.Contains(node->NodePoint))
-	found.push_back(node->NodePoint);
+      if(!b.Contains(node->NodePoint))
+	continue;
+      found.push_back(node->NodePoint);
+
+/*
+      if(!previouslySubdivided && subdividing.load() == true)
+      {
+	HazardPointer::Release(hazardPointer);
+	subdivide();
+	return Query(b);
+      }
+      else if(points.load() == nullptr)
+      {
+	HazardPointer::Release(hazardPointer);
+	return Query(b);
+      }
+*/
     }
   }
   HazardPointer::Release(hazardPointer);
 
-  if(Nw != nullptr)
+  LockfreeQuadtree* nw = Nw.load();
+  if(nw != nullptr)
   {
-    if(!previouslySubdivided && points.load() == nullptr)
-      return Query(b); // this is an optimization. Prevents unnecessary child loading, but not strictly necessary.
-    LockfreeQuadtree* q = Nw.load();
-    vector<Point> f = q->Query(b);
-    found.insert(found.end(), f.begin(), f.end());
-  }
-  if(Ne != nullptr)
-  {
-    if(!previouslySubdivided && points.load() == nullptr)
-      return Query(b); // optimization
-    LockfreeQuadtree* q = Ne.load();
-    vector<Point> f = q->Query(b);
-    found.insert(found.end(), f.begin(), f.end());
-  }
-  if(Sw != nullptr)
-  {
-    if(!previouslySubdivided && points.load() == nullptr)
-      return Query(b); // optimization
-    LockfreeQuadtree* q = Sw.load();
-    vector<Point> f = q->Query(b);
-    found.insert(found.end(), f.begin(), f.end());
-  }
-  if(Se != nullptr)
-  {
-    if(!previouslySubdivided && points.load() == nullptr)
-      return Query(b); // optimization
-    LockfreeQuadtree* q = Se.load();
-    vector<Point> f = q->Query(b);
+//    if(!previouslySubdivided && (subdividing.load() == true || points.load() == nullptr))
+//      return Query(b); // this is an optimization. Prevents unnecessary child loading, but not strictly necessary.
+
+    vector<Point> f = nw->Query(b);
     found.insert(found.end(), f.begin(), f.end());
   }
 
+  LockfreeQuadtree* ne = Ne.load();
+  if(ne != nullptr)
+  {
+//    if(!previouslySubdivided && (subdividing.load() == true || points.load() == nullptr))
+//      return Query(b); // optimization
+
+    vector<Point> f = ne->Query(b);
+    found.insert(found.end(), f.begin(), f.end());
+  }
+
+  LockfreeQuadtree* sw = Sw.load();
+  if(sw != nullptr)
+  {
+//    if(!previouslySubdivided && (subdividing.load() == true || points.load() == nullptr))
+//      return Query(b); // optimization
+
+    vector<Point> f = sw->Query(b);
+    found.insert(found.end(), f.begin(), f.end());
+  }
+  
+  LockfreeQuadtree* se = Se.load();
+  if(se != nullptr)
+  {
+//    if(!previouslySubdivided && (subdividing.load() == true || points.load() == nullptr))
+//      return Query(b); // optimization
+
+    vector<Point> f = se->Query(b);
+    found.insert(found.end(), f.begin(), f.end());
+  }
+
+
   // if the tree subdivided while we were querying, redo the query. We probably missed some points as they were being moved.
-  if(!previouslySubdivided && points.load() == nullptr)
+  if(!previouslySubdivided && (subdividing.load() == true || points.load() == nullptr))
+  {
+    found.clear();
     return Query(b); // absolutely necessary
+  }
   return found;
 }
 

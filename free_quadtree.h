@@ -41,6 +41,7 @@ private:
   void subdivide();
   void disperse();
   static void gc(); ///< this function is thread-specific. It collects garbage specific to the thread, not the tree.
+  std::atomic<bool> subdividing;
 
   class HazardPointer
   {
@@ -49,7 +50,8 @@ private:
     HazardPointer* Next;
   private:
     std::atomic_flag active;
-  private:
+
+
     static std::atomic<HazardPointer*> head;
 //    static std::atomic_size_t length;
   public:
