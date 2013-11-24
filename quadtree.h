@@ -16,9 +16,11 @@ struct Point
   {
     return std::string() + "[" + std::to_string(X) + "," + std::to_string(Y) + "]";
   }
+
   double X;
   double Y;
 };
+
 
 class PointListNode
 {
@@ -72,7 +74,17 @@ public:
   virtual std::vector<Point> Query(const BoundingBox&) = 0;
   virtual BoundingBox Boundary() = 0;
 };
-
 }
+/*
+bool operator==(const quadtree::Point& lhs, const quadtree::Point& rhs)
+{
+  return lhs.X == rhs.X && lhs.Y == rhs.Y;
+}
+
+bool operator!=(const quadtree::Point& lhs, const quadtree::Point& rhs)
+{
+  return !operator==(lhs, rhs);
+}
+*/
 
 #endif // quadtreeH

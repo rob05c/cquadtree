@@ -29,8 +29,7 @@ using quadtree::Quadtree;
 using quadtree::LockfreeQuadtree;
 using quadtree::LockQuadtree;
 
-const unsigned int NODE_CAPACITY = 4;
-//const unsigned int NODE_CAPACITY = 10000000;
+const unsigned int DEFAULT_CAPACITY = 4;
 const unsigned int DEFAULT_THREADS = max(thread::hardware_concurrency(), 1u);
 const unsigned int DEFAULT_POINTS = 10000000;
 
@@ -59,7 +58,7 @@ int testInsert(Quadtree* q, int points, int numThreads)
   };
 
 
-  cout << "query-inserting " << tpoints << " per thread\n";  
+  cout << "inserting " << tpoints << " per thread\n";  
 
   vector<shared_ptr<thread>> threads;
   for(int i = 0, end = numThreads; i != end; ++i)
@@ -104,7 +103,7 @@ int testInsertQuery(Quadtree* q, int points, int numThreads)
     }
   };
 
-  cout << "inserting " << tpoints << " per thread\n";  
+  cout << "query-inserting " << tpoints << " per thread\n";  
 
   vector<shared_ptr<thread>> queryThreads;
   for(int i = 0, end = 1; i != end; ++i)
@@ -127,13 +126,16 @@ int testInsertQuery(Quadtree* q, int points, int numThreads)
 
 void printTree(Quadtree* q)
 {
-  const time_point<system_clock> start = system_clock::now();
+  const clock_t start = clock();
 
-  vector<Point> ps = q->Query(q->Boundary());
+//  vector<Point> ps = q->Query(q->Boundary());
 
-  const time_point<system_clock> end = system_clock::now();
-  const duration<double> elapsed = end - start;
-  const int seconds_elapsed = elapsed.count();
+  const BoundingBox b = {{100.0, 100.0}, {25.0, 25.0}};
+  vector<Point> ps = q->Query(b);
+
+  const clock_t end = clock();
+  const double seconds_elapsed = ((double)end - start) / CLOCKS_PER_SEC;
+
   cout << "queried " << ps.size() << " in " << seconds_elapsed << " seconds." << endl;
 
   if(ps.size() < 1000)
@@ -153,13 +155,14 @@ int main(int argc, char** argv)
 
   auto points = DEFAULT_POINTS;
   auto threads = DEFAULT_THREADS;
+  auto capacity = DEFAULT_CAPACITY;
 
   if(argc > 1)
   {
     const auto p = static_cast<unsigned int>(strtoul(argv[1], 0, 10));
     if(p == 0)
     {
-      cout << "Usage: quadtree points threads lockfree\n";
+      cout << "Usage: quadtree points threads lockfree capacity\n";
       return 0;
     }
     if(p > 0)
@@ -179,6 +182,13 @@ int main(int argc, char** argv)
     lockfree = t > 0;
   }
 
+  if(argc > 4)
+  {
+    const auto c = static_cast<unsigned int>(strtoul(argv[4], 0, 10));
+    if(c > 0)
+      capacity = c;
+  }
+
   cout << (lockfree ? "Lock Free\n" : "Lock Based\n");
 
   srand(time(nullptr));
@@ -186,14 +196,14 @@ int main(int argc, char** argv)
 
   cout << "threads: " << threads << endl;
   cout << "points: " << points << endl;
-  cout << "capacity: " << NODE_CAPACITY << endl;
+  cout << "capacity: " << capacity << endl;
 
   //#if !__has_feature(cxx_atomic)
   //  cout << "no atomic :(" << endl;
   //#endif
 
   const BoundingBox b = {{100, 100}, {50, 50}};
-  auto q = std::unique_ptr<Quadtree>(lockfree ? (Quadtree*)new LockfreeQuadtree(b, NODE_CAPACITY) : (Quadtree*)new LockQuadtree(b, NODE_CAPACITY));
+  auto q = std::unique_ptr<Quadtree>(lockfree ? (Quadtree*)new LockfreeQuadtree(b, capacity) : (Quadtree*)new LockQuadtree(b, capacity));
 
   const time_point<system_clock> start = system_clock::now();
 

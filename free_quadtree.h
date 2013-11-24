@@ -16,6 +16,7 @@ public:
   virtual ~LockfreeQuadtree() {}
 
   virtual bool               Insert(const Point& p);
+//  virtual bool               Delete(const Point& p);
   virtual std::vector<Point> Query(const BoundingBox&);
   virtual BoundingBox        Boundary() {return boundary;}
   bool ThreadCanComplete(); ///< @todo not sure I like this. Make gc() call until success on each func?

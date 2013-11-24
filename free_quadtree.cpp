@@ -34,7 +34,59 @@ LockfreeQuadtree::LockfreeQuadtree(BoundingBox boundary_, size_t capacity_)
 {
   subdividing.store(false);
 }
+/*
+/// @todo finish this
+bool LockfreeQuadtree::Delete(const Point& p)
+{
+  if(!boundary.Contains(p))
+    return false;
+  HazardPointer* hazardPointer = HazardPointer::Acquire(); // @todo create a finaliser/whileinscope class for HazardPointers.
+  while(true)
+  {
+    while(hazardPointer->Hazard.load() != points.load())
+      hazardPointer->Hazard.store(points.load());
+    PointList* oldPoints = hazardPointer->Hazard.load();
+    if(oldPoints == nullptr || oldPoints->Length >= oldPoints->Capacity)
+      break;
 
+    PointListNode* node = oldPoints->First;
+    while(node != nullptr)
+    {
+      if(node->NodePoint == p)
+      {
+	const bool ok = points.compare_exchange_strong(node->Next, newPoints);	
+      }
+    }
+
+    PointList* newPoints = new PointList(oldPoints->Capacity);
+    newPoints->First = new PointListNode(p, oldPoints->First);
+    newPoints->Length = oldPoints->Length + 1;
+    const bool ok = points.compare_exchange_strong(oldPoints, newPoints);
+    hazardPointer->Hazard.store(nullptr);
+
+    if(ok)
+    {
+      deleteList.push_back(oldPoints);
+      gc();
+      HazardPointer::Release(hazardPointer); /// @todo create a finaliser. This is dangerous. I don't like it. Not one bit.
+      return true;
+    }
+    else
+    {
+      delete newPoints->First;
+      delete newPoints;
+    }
+
+
+  }
+  HazardPointer::Release(hazardPointer);
+
+  if(points.load() != nullptr)
+    subdivide();
+
+  return Nw.load()->Delete(p) || Ne.load()->Delete(p) || Sw.load()->Delete(p) || Se.load()->Delete(p);
+}
+*/
 bool LockfreeQuadtree::Insert(const Point& p)
 {
   if(!boundary.Contains(p))
@@ -190,7 +242,6 @@ void LockfreeQuadtree::disperse()
     points.store(nullptr);
 }
 
-/// @todo test this with and without optimisations.
 vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
 {
   vector<Point> found;
@@ -198,18 +249,15 @@ vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
   if(!boundary.Intersects(b))
     return found;
 
-
-
   HazardPointer* hazardPointer = HazardPointer::Acquire();
   while(hazardPointer->Hazard.load() != points.load())
     hazardPointer->Hazard.store(points.load());
   PointList* localPoints = hazardPointer->Hazard.load();
-  const bool previouslySubdivided = localPoints == nullptr;
 
-  
+  const bool previouslySubdivided = localPoints == nullptr;
   if(!previouslySubdivided && subdividing.load() == true)
   {
-//    cout << "query helping\n";
+    cout << "query helping\n";
     HazardPointer::Release(hazardPointer);
     subdivide();
     return Query(b);
@@ -219,23 +267,8 @@ vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
   {
     for(auto node = localPoints->First; node != nullptr; node = node->Next)
     {
-      if(!b.Contains(node->NodePoint))
-	continue;
-      found.push_back(node->NodePoint);
-
-/*
-      if(!previouslySubdivided && subdividing.load() == true)
-      {
-	HazardPointer::Release(hazardPointer);
-	subdivide();
-	return Query(b);
-      }
-      else if(points.load() == nullptr)
-      {
-	HazardPointer::Release(hazardPointer);
-	return Query(b);
-      }
-*/
+      if(b.Contains(node->NodePoint))
+	found.push_back(node->NodePoint);
     }
   }
   HazardPointer::Release(hazardPointer);
@@ -243,9 +276,6 @@ vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
   LockfreeQuadtree* nw = Nw.load();
   if(nw != nullptr)
   {
-//    if(!previouslySubdivided && (subdividing.load() == true || points.load() == nullptr))
-//      return Query(b); // this is an optimization. Prevents unnecessary child loading, but not strictly necessary.
-
     vector<Point> f = nw->Query(b);
     found.insert(found.end(), f.begin(), f.end());
   }
@@ -253,9 +283,6 @@ vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
   LockfreeQuadtree* ne = Ne.load();
   if(ne != nullptr)
   {
-//    if(!previouslySubdivided && (subdividing.load() == true || points.load() == nullptr))
-//      return Query(b); // optimization
-
     vector<Point> f = ne->Query(b);
     found.insert(found.end(), f.begin(), f.end());
   }
@@ -263,9 +290,6 @@ vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
   LockfreeQuadtree* sw = Sw.load();
   if(sw != nullptr)
   {
-//    if(!previouslySubdivided && (subdividing.load() == true || points.load() == nullptr))
-//      return Query(b); // optimization
-
     vector<Point> f = sw->Query(b);
     found.insert(found.end(), f.begin(), f.end());
   }
@@ -273,18 +297,14 @@ vector<Point> LockfreeQuadtree::Query(const BoundingBox& b)
   LockfreeQuadtree* se = Se.load();
   if(se != nullptr)
   {
-//    if(!previouslySubdivided && (subdividing.load() == true || points.load() == nullptr))
-//      return Query(b); // optimization
-
     vector<Point> f = se->Query(b);
     found.insert(found.end(), f.begin(), f.end());
   }
 
-
   // if the tree subdivided while we were querying, redo the query. We probably missed some points as they were being moved.
   if(!previouslySubdivided && (subdividing.load() == true || points.load() == nullptr))
   {
-    found.clear();
+    cout << "query subdividied\n";
     return Query(b); // absolutely necessary
   }
   return found;
