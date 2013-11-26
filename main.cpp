@@ -20,8 +20,9 @@ using std::srand;
 using std::time;
 using std::max;
 using std::strtoul;
+using std::chrono::duration_cast;
 using std::chrono::time_point;
-using std::chrono::system_clock;
+using std::chrono::high_resolution_clock;
 using std::chrono::duration;
 using quadtree::BoundingBox;
 using quadtree::Point;
@@ -126,17 +127,16 @@ int testInsertQuery(Quadtree* q, int points, int numThreads)
 
 void printTree(Quadtree* q)
 {
-  const clock_t start = clock();
-
-//  vector<Point> ps = q->Query(q->Boundary());
-
   const BoundingBox b = {{100.0, 100.0}, {25.0, 25.0}};
+
+  const time_point<high_resolution_clock> start = high_resolution_clock::now();
+//  vector<Point> ps = q->Query(q->Boundary());
   vector<Point> ps = q->Query(b);
 
-  const clock_t end = clock();
-  const double seconds_elapsed = ((double)end - start) / CLOCKS_PER_SEC;
+  const time_point<high_resolution_clock> end = high_resolution_clock::now();
+  const duration<double> elapsed = duration_cast<duration<double>>(end - start);
 
-  cout << "queried " << ps.size() << " in " << seconds_elapsed << " seconds." << endl;
+  cout << "queried " << ps.size() << " in " << elapsed.count() << " seconds." << endl;
 
   if(ps.size() < 1000)
   {
@@ -205,15 +205,14 @@ int main(int argc, char** argv)
   const BoundingBox b = {{100, 100}, {50, 50}};
   auto q = std::unique_ptr<Quadtree>(lockfree ? (Quadtree*)new LockfreeQuadtree(b, capacity) : (Quadtree*)new LockQuadtree(b, capacity));
 
-  const time_point<system_clock> start = system_clock::now();
+  const time_point<high_resolution_clock> start = high_resolution_clock::now();
 
   const int inserted = testInsert(q.get(), points, threads);
 
-  const time_point<system_clock> end = system_clock::now();
-  const duration<double> elapsed = end - start;
-  const int seconds_elapsed = elapsed.count();
+  const time_point<high_resolution_clock> end = high_resolution_clock::now();
+  const duration<double> elapsed = duration_cast<duration<double>>(end - start);
 
-  cout << "inserted " << inserted << " in " << seconds_elapsed << " seconds with " << threads << " threads." << endl;
+  cout << "inserted " << inserted << " in " << elapsed.count() << " seconds with " << threads << " threads." << endl;
 
   printTree(q.get());
 
